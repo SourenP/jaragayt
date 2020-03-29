@@ -1,0 +1,5 @@
+*.o
+main
+.vscode
+.clang-format
+.DS_Store
