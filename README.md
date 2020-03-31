@@ -6,7 +6,7 @@ make && ./main
 ```
 
 ## Images
-
+_What the project looks like currently_
 ![current_2531b5.png](images/current_2531b5.png)
 
 ## Resources
