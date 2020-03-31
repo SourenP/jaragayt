@@ -24,8 +24,8 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
 
 // Window
-const unsigned int SCR_WIDTH = 600;
-const unsigned int SCR_HEIGHT = 600;
+const unsigned int SCR_WIDTH = 400;
+const unsigned int SCR_HEIGHT = 400;
 GLFWwindow* window;
 
 // Shader
@@ -65,9 +65,9 @@ const float vertex_data[] = {
 
     // colors
     // triangle A
-    1.0f, 0.0f, 0.0f, // A traingle bottom right
-    0.0f, 1.0f, 0.0f, // A triangle bottom left
-    0.0f, 0.0f, 1.0f, // A triangle top
+    1.0f, 0.0f, 0.0f, // bottom right
+    0.0f, 1.0f, 0.0f, // bottom left
+    0.0f, 0.0f, 1.0f, // top
     // line A
     1.0f, 0.0f, 0.0f, // start
     0.0f, 1.0f, 0.0f, // end
@@ -126,7 +126,7 @@ int init_program() {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
     // glfw window creation
-    window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
+    window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Jaragayt", NULL, NULL);
     if (window == NULL) {
         std::cout << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
