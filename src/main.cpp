@@ -16,6 +16,10 @@
 #include <math.h>
 #include <sstream>
 
+#define ARRAY_COUNT(array)                                                                         \
+    (sizeof(array) /                                                                               \
+     (sizeof(array[0]) * (sizeof(array) != sizeof(void*) || sizeof(array[0]) <= sizeof(void*))))
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
 
@@ -24,8 +28,7 @@ const unsigned int SCR_WIDTH = 600;
 const unsigned int SCR_HEIGHT = 600;
 GLFWwindow* window;
 
-// Render
-unsigned int VBO, VAO, EBO;
+// Shader
 Shader* shader;
 
 // Time
@@ -37,12 +40,40 @@ glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 const float CAMERA_SPEED = 8.0f;
+const float MOUSE_SENSITIVITY = 0.03;
 bool firstMouse = true;
 float yaw = -90.0f;
 float pitch = 0.0f;
 float lastX = (float)SCR_WIDTH / 2.0;
 float lastY = (float)SCR_HEIGHT / 2.0;
 float fov = 45.0f;
+
+// Render
+GLuint vertex_buffer_object;
+GLuint index_buffer_object;
+GLuint vertex_array_object;
+const GLshort index_data[] = {0, 1, 2, 3, 4};
+const float vertex_data[] = {
+    // positions
+    // triangle A
+    1.0f, 0.0f, -1.0f, // bottom right
+    0.0f, 0.0f, -1.0f, // bottom left
+    0.0f, 1.0f, -1.0f, // top
+    // line A
+    0.0f, 0.0f, 0.0f, // start
+    1.0f, 1.0f, 0.0f, // end
+
+    // colors
+    // triangle A
+    1.0f, 0.0f, 0.0f, // A traingle bottom right
+    0.0f, 1.0f, 0.0f, // A triangle bottom left
+    0.0f, 0.0f, 1.0f, // A triangle top
+    // line A
+    1.0f, 0.0f, 0.0f, // start
+    0.0f, 1.0f, 0.0f, // end
+};
+const int vertex_count = sizeof(vertex_data) / sizeof(float) / (3 + 3);
+const int line_index_offset = 3;
 
 // Adjust camera direction
 void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
@@ -57,9 +88,8 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
     lastX = xpos;
     lastY = ypos;
 
-    float sensitivity = 0.05;
-    xoffset *= sensitivity;
-    yoffset *= sensitivity;
+    xoffset *= MOUSE_SENSITIVITY;
+    yoffset *= MOUSE_SENSITIVITY;
 
     yaw += xoffset;
     pitch += yoffset;
@@ -86,7 +116,7 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
         fov = 45.0f;
 }
 
-int setup_init() {
+int init_program() {
     // glfw: initialize and configure
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -120,52 +150,63 @@ int setup_init() {
     return 0;
 }
 
-// Set up vertex data (and buffer(s)) and configure vertex attributes
-void setup_vertices() {
-    float vertices[] = {
-        // positions         // colors
-        0.5f,  -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, // bottom right
-        -0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, // bottom left
-        0.0f,  0.5f,  0.0f, 0.0f, 0.0f, 1.0f  // top
-    };
-
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-
-    // bind the vertex array object
-    glBindVertexArray(VAO);
-
-    // bind vertex buffer(s)
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    // color attribute
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex
-    // attribute's bound vertex buffer object so afterwards we can safely unbind
+void init_vertex_buffer() {
+    glGenBuffers(1, &vertex_buffer_object);
+    glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_object);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but
-    // this rarely happens. Modifying other VAOs requires a call to glBindVertexArray anyways so we
-    // generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
-    glBindVertexArray(0);
+    glGenBuffers(1, &index_buffer_object);
 
-    // uncomment this call to draw in wireframe polygons.
-    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_object);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(index_data), index_data, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+}
+
+void init_vertices() {
+    glGenVertexArrays(1, &vertex_array_object);
+    glBindVertexArray(vertex_array_object);
+
+    size_t color_data_offset = sizeof(float) * 3 * vertex_count;
+    glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_object);
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(0,        // attribute 0 in shader
+                          3,        // size
+                          GL_FLOAT, // type
+                          GL_FALSE, // normalized?
+                          0,        // stride
+                          (void*)0  // array buffer offset
+    );
+    glVertexAttribPointer(1,                       // atrtribute 1 in shader
+                          3,                       // size
+                          GL_FLOAT,                // type
+                          GL_FALSE,                // normalized?
+                          0,                       // stride
+                          (void*)color_data_offset // array buffer offset
+    );
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_object);
+
+    glBindVertexArray(0);
 }
 
 // Initalize shaders
-void setup_shaders() {
+void init_shaders() {
     shader = new Shader("assets/shaders/vert.glsl", "assets/shaders/frag.glsl");
     shader->use();
 }
 
 void draw() {
+    glBindVertexArray(vertex_array_object);
+
+    // Draw triangles
+    glDrawElements(GL_TRIANGLES, ARRAY_COUNT(index_data), GL_UNSIGNED_SHORT, 0);
+
+    // Draw lines
+    glDrawElementsBaseVertex(GL_LINES, 2, GL_UNSIGNED_SHORT, 0, line_index_offset);
+}
+
+void view_projection_model() {
     // activate shader
     shader->use();
 
@@ -181,17 +222,16 @@ void draw() {
     // model
     glm::mat4 model = glm::mat4(1.0f);
     shader->setMat4("model", model);
-
-    // draw
-    glBindVertexArray(VAO);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
 int main() {
     // setup
-    setup_init();
-    setup_vertices();
-    setup_shaders();
+    init_program();
+    init_vertex_buffer();
+    init_shaders();
+    init_vertices();
+    // setup_triangle_vertices();
+    // setup_line_vertices();
 
     // render loop
     while (!glfwWindowShouldClose(window)) {
@@ -207,16 +247,13 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // render
+        view_projection_model();
         draw();
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
-    // optional: de-allocate all resources once they've outlived their purpose:
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
 
     // deallocated shader
     delete shader;
