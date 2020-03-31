@@ -7,7 +7,7 @@ make && ./main
 
 ## Images
 
-![current_2531b5.png][images/current_2531b5.png]
+![current_2531b5.png](images/current_2531b5.png)
 
 ## Resources
 
