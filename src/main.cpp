@@ -11,14 +11,29 @@
 
 #include "../include/shader.h"
 
+#include <array>
 #include <fstream>
 #include <iostream>
 #include <math.h>
 #include <sstream>
+#include <vector>
 
 #define ARRAY_COUNT(array)                                                                         \
     (sizeof(array) /                                                                               \
      (sizeof(array[0]) * (sizeof(array) != sizeof(void*) || sizeof(array[0]) <= sizeof(void*))))
+
+// Colors
+#define BROWN_COLOR 92. / 255., 75. / 255., 81. / 255.
+#define GREEN_COLOR 40. / 255., 190. / 255., 178. / 255.
+#define YELLOW_COLOR 242. / 255., 235. / 255., 191. / 255.
+#define ORANGE_COLOR 243. / 255., 181. / 255., 98. / 255.
+#define RED_COLOR 240. / 255., 96. / 255., 96. / 255.
+
+// Vertex counts
+const int TRI_VERTEX_COUNT = 3;
+const int LINE_VERTEX_COUNT = 2;
+const int POS_ELEM_COUNT = 3;
+const int COL_ELEM_COUNT = 3;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
@@ -27,6 +42,11 @@ void processInput(GLFWwindow* window);
 const unsigned int SCR_WIDTH = 400;
 const unsigned int SCR_HEIGHT = 400;
 GLFWwindow* window;
+
+// Vertex and index objects
+GLuint vertex_buffer_object;
+GLuint index_buffer_object;
+GLuint vertex_array_object;
 
 // Shader
 Shader* shader;
@@ -48,32 +68,108 @@ float lastX = (float)SCR_WIDTH / 2.0;
 float lastY = (float)SCR_HEIGHT / 2.0;
 float fov = 45.0f;
 
-// Render
-GLuint vertex_buffer_object;
-GLuint index_buffer_object;
-GLuint vertex_array_object;
-const GLshort index_data[] = {0, 1, 2, 3, 4};
-const float vertex_data[] = {
-    // positions
-    // triangle A
-    1.0f, 0.0f, -1.0f, // bottom right
-    0.0f, 0.0f, -1.0f, // bottom left
-    0.0f, 1.0f, -1.0f, // top
-    // line A
-    0.0f, 0.0f, 0.0f, // start
-    1.0f, 1.0f, 0.0f, // end
-
-    // colors
-    // triangle A
-    1.0f, 0.0f, 0.0f, // bottom right
-    0.0f, 1.0f, 0.0f, // bottom left
-    0.0f, 0.0f, 1.0f, // top
-    // line A
-    1.0f, 0.0f, 0.0f, // start
-    0.0f, 1.0f, 0.0f, // end
+// Geometry
+struct Triangle {
+    glm::vec3 a_pos;
+    glm::vec3 b_pos;
+    glm::vec3 c_pos;
+    glm::vec3 a_col;
+    glm::vec3 b_col;
+    glm::vec3 c_col;
 };
-const int vertex_count = sizeof(vertex_data) / sizeof(float) / (3 + 3);
-const int line_index_offset = 3;
+
+struct Line {
+    glm::vec3 a_pos;
+    glm::vec3 b_pos;
+    glm::vec3 a_col;
+    glm::vec3 b_col;
+};
+
+std::pair<std::vector<Triangle>, std::vector<Line>> create_geometry() {
+    std::vector<Triangle> triangles;
+    std::vector<Line> lines;
+    triangles.push_back((Triangle){.a_pos = {1.0f, 0.0f, -1.0f},
+                                   .b_pos = {0.0f, 0.0f, -1.0f},
+                                   .c_pos = {0.0f, 1.0f, -1.0f},
+                                   .a_col = {ORANGE_COLOR},
+                                   .b_col = {RED_COLOR},
+                                   .c_col = {ORANGE_COLOR}});
+    triangles.push_back((Triangle){.a_pos = {1.0f, 0.0f, -2.0f},
+                                   .b_pos = {0.0f, 0.0f, -2.0f},
+                                   .c_pos = {0.0f, 1.0f, -2.0f},
+                                   .a_col = {RED_COLOR},
+                                   .b_col = {ORANGE_COLOR},
+                                   .c_col = {RED_COLOR}});
+    lines.push_back((Line){.a_pos = {0.0f, 0.0f, 0.0f},
+                           .b_pos = {1.0f, 1.0f, 0.0f},
+                           .a_col = {YELLOW_COLOR},
+                           .b_col = {YELLOW_COLOR}});
+    lines.push_back((Line){.a_pos = {0.0f, 1.0f, -3.0f},
+                           .b_pos = {1.0f, 0.0f, -3.0f},
+                           .a_col = {GREEN_COLOR},
+                           .b_col = {GREEN_COLOR}});
+    return std::make_pair(triangles, lines);
+}
+
+std::pair<std::vector<float>, std::vector<GLshort>>
+init_vertex_index_data(std::vector<Triangle> triangles, std::vector<Line> lines) {
+    std::vector<float> vertex_data;
+    std::vector<GLshort> index_data;
+    size_t index_count = 0;
+
+    // Add triangle vertex positions
+    for (auto triangle : triangles) {
+        vertex_data.push_back(triangle.a_pos.x);
+        vertex_data.push_back(triangle.a_pos.y);
+        vertex_data.push_back(triangle.a_pos.z);
+        index_data.push_back(index_count++);
+        vertex_data.push_back(triangle.b_pos.x);
+        vertex_data.push_back(triangle.b_pos.y);
+        vertex_data.push_back(triangle.b_pos.z);
+        index_data.push_back(index_count++);
+        vertex_data.push_back(triangle.c_pos.x);
+        vertex_data.push_back(triangle.c_pos.y);
+        vertex_data.push_back(triangle.c_pos.z);
+        index_data.push_back(index_count++);
+    }
+
+    // Add line vertex positions
+    for (auto line : lines) {
+        vertex_data.push_back(line.a_pos.x);
+        vertex_data.push_back(line.a_pos.y);
+        vertex_data.push_back(line.a_pos.z);
+        index_data.push_back(index_count++);
+        vertex_data.push_back(line.b_pos.x);
+        vertex_data.push_back(line.b_pos.y);
+        vertex_data.push_back(line.b_pos.z);
+        index_data.push_back(index_count++);
+    }
+
+    // Add triangle vertex colors
+    for (auto triangle : triangles) {
+        vertex_data.push_back(triangle.a_col.r);
+        vertex_data.push_back(triangle.a_col.g);
+        vertex_data.push_back(triangle.a_col.b);
+        vertex_data.push_back(triangle.b_col.r);
+        vertex_data.push_back(triangle.b_col.g);
+        vertex_data.push_back(triangle.b_col.b);
+        vertex_data.push_back(triangle.c_col.r);
+        vertex_data.push_back(triangle.c_col.g);
+        vertex_data.push_back(triangle.c_col.b);
+    }
+
+    // Add line vertex colors
+    for (auto line : lines) {
+        vertex_data.push_back(line.a_col.r);
+        vertex_data.push_back(line.a_col.g);
+        vertex_data.push_back(line.a_col.b);
+        vertex_data.push_back(line.b_col.r);
+        vertex_data.push_back(line.b_col.g);
+        vertex_data.push_back(line.b_col.b);
+    }
+
+    return std::make_pair(vertex_data, index_data);
+}
 
 // Adjust camera direction
 void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
@@ -150,7 +246,24 @@ int init_program() {
     return 0;
 }
 
-void init_vertex_buffer() {
+void init_vertices(std::vector<float> vertex_data_in, std::vector<GLshort> index_data_in,
+                   size_t triangle_count, size_t line_count) {
+    // Generate c style arrays
+    float vertex_data[vertex_data_in.size()];
+    for (size_t i = 0; i < vertex_data_in.size(); i++) {
+        vertex_data[i] = vertex_data_in[i];
+    }
+
+    GLshort index_data[index_data_in.size()];
+    for (size_t i = 0; i < index_data_in.size(); i++) {
+        index_data[i] = index_data_in[i];
+    }
+
+    // Variables
+    int vertex_count = (triangle_count * TRI_VERTEX_COUNT) + (line_count * LINE_VERTEX_COUNT);
+    int line_index_offset = triangle_count;
+
+    // Bind and generate buffers
     glGenBuffers(1, &vertex_buffer_object);
     glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_object);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
@@ -161,25 +274,24 @@ void init_vertex_buffer() {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_object);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(index_data), index_data, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-}
 
-void init_vertices() {
+    // Vertex array object
     glGenVertexArrays(1, &vertex_array_object);
     glBindVertexArray(vertex_array_object);
 
-    size_t color_data_offset = sizeof(float) * 3 * vertex_count;
+    size_t color_data_offset = sizeof(float) * POS_ELEM_COUNT * vertex_count;
     glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_object);
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(0,        // attribute 0 in shader
-                          3,        // size
-                          GL_FLOAT, // type
-                          GL_FALSE, // normalized?
-                          0,        // stride
-                          (void*)0  // array buffer offset
+    glVertexAttribPointer(0,              // attribute 0 in shader
+                          POS_ELEM_COUNT, // size
+                          GL_FLOAT,       // type
+                          GL_FALSE,       // normalized?
+                          0,              // stride
+                          (void*)0        // array buffer offset
     );
     glVertexAttribPointer(1,                       // atrtribute 1 in shader
-                          3,                       // size
+                          COL_ELEM_COUNT,          // size
                           GL_FLOAT,                // type
                           GL_FALSE,                // normalized?
                           0,                       // stride
@@ -196,14 +308,18 @@ void init_shaders() {
     shader->use();
 }
 
-void draw() {
+void draw(size_t triangle_count, size_t line_count) {
+    uint triangle_vertex_count = triangle_count * TRI_VERTEX_COUNT;
+    uint line_vertex_count = line_count * LINE_VERTEX_COUNT;
+    uint line_index_offset = triangle_count * TRI_VERTEX_COUNT;
+
     glBindVertexArray(vertex_array_object);
 
     // Draw triangles
-    glDrawElements(GL_TRIANGLES, ARRAY_COUNT(index_data), GL_UNSIGNED_SHORT, 0);
+    glDrawElements(GL_TRIANGLES, triangle_vertex_count, GL_UNSIGNED_SHORT, 0);
 
     // Draw lines
-    glDrawElementsBaseVertex(GL_LINES, 2, GL_UNSIGNED_SHORT, 0, line_index_offset);
+    glDrawElementsBaseVertex(GL_LINES, line_vertex_count, GL_UNSIGNED_SHORT, 0, line_index_offset);
 }
 
 void view_projection_model() {
@@ -226,10 +342,14 @@ void view_projection_model() {
 
 int main() {
     // setup
+    auto triangles_and_lines = create_geometry();
+    auto triangles = triangles_and_lines.first;
+    auto lines = triangles_and_lines.second;
+    auto vertices_and_indices = init_vertex_index_data(triangles, lines);
     init_program();
-    init_vertex_buffer();
+    init_vertices(vertices_and_indices.first, vertices_and_indices.second, triangles.size(),
+                  lines.size());
     init_shaders();
-    init_vertices();
     // setup_triangle_vertices();
     // setup_line_vertices();
 
@@ -243,12 +363,12 @@ int main() {
         processInput(window);
 
         // render
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClearColor(BROWN_COLOR, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // render
         view_projection_model();
-        draw();
+        draw(triangles.size(), lines.size());
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         glfwSwapBuffers(window);
