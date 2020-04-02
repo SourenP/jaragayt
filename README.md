@@ -6,9 +6,15 @@ make && ./main
 ```
 
 ## Images
-_What the project looks like currently_
+### Current look
 
-![current_2531b5.png](images/current_2531b5.png)
+**Commit**: [bb1475](https://github.com/SourenP/jaragayt/commit/bb14757251d5b22b3292e4ddd3e2efbfd59c6ab1)
+
+**Date**: April 1 2020
+
+*A set of triangles drawn by populating a list of Triangles and Lines*
+
+![current_bb1475.png](images/current_bb1475.png)
 
 ## Resources
 
