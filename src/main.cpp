@@ -10,6 +10,9 @@
 #include "../include/glm/gtc/type_ptr.hpp"
 
 #include "../include/shader.h"
+#include "camera.hpp"
+#include "constants.hpp"
+#include "geometry.hpp"
 
 #include <array>
 #include <fstream>
@@ -22,25 +25,10 @@
     (sizeof(array) /                                                                               \
      (sizeof(array[0]) * (sizeof(array) != sizeof(void*) || sizeof(array[0]) <= sizeof(void*))))
 
-// Colors
-#define BROWN_COLOR 92. / 255., 75. / 255., 81. / 255.
-#define GREEN_COLOR 40. / 255., 190. / 255., 178. / 255.
-#define YELLOW_COLOR 242. / 255., 235. / 255., 191. / 255.
-#define ORANGE_COLOR 243. / 255., 181. / 255., 98. / 255.
-#define RED_COLOR 240. / 255., 96. / 255., 96. / 255.
-
-// Vertex counts
-const int TRI_VERTEX_COUNT = 3;
-const int LINE_VERTEX_COUNT = 2;
-const int POS_ELEM_COUNT = 3;
-const int COL_ELEM_COUNT = 3;
-
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
 
 // Window
-const unsigned int SCR_WIDTH = 400;
-const unsigned int SCR_HEIGHT = 400;
 GLFWwindow* window;
 
 // Vertex and index objects
@@ -55,66 +43,31 @@ Shader* shader;
 float deltaTime = 0.0f; // Time between current frame and last frame
 float lastFrame = 0.0f; // Time of last frame
 
-// Camera
-glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
-glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
-glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
-const float CAMERA_SPEED = 8.0f;
-const float MOUSE_SENSITIVITY = 0.03;
-bool firstMouse = true;
-float yaw = -90.0f;
-float pitch = 0.0f;
-float lastX = (float)SCR_WIDTH / 2.0;
-float lastY = (float)SCR_HEIGHT / 2.0;
-float fov = 45.0f;
-
-// Geometry
-struct Triangle {
-    glm::vec3 a_pos;
-    glm::vec3 b_pos;
-    glm::vec3 c_pos;
-    glm::vec3 a_col;
-    glm::vec3 b_col;
-    glm::vec3 c_col;
-};
-
-struct Line {
-    glm::vec3 a_pos;
-    glm::vec3 b_pos;
-    glm::vec3 a_col;
-    glm::vec3 b_col;
-};
-
-std::pair<std::vector<Triangle>, std::vector<Line>> create_geometry() {
-    std::vector<Triangle> triangles;
-    std::vector<Line> lines;
-    triangles.push_back((Triangle){.a_pos = {1.0f, 0.0f, -1.0f},
-                                   .b_pos = {0.0f, 0.0f, -1.0f},
+void create_geometry(std::vector<Triangle>& triangles, std::vector<Line>& lines) {
+    triangles.push_back((Triangle){.a_pos = {0.0f, 0.0f, -1.0f},
+                                   .b_pos = {1.0f, 0.0f, -1.0f},
                                    .c_pos = {0.0f, 1.0f, -1.0f},
-                                   .a_col = {ORANGE_COLOR},
-                                   .b_col = {RED_COLOR},
-                                   .c_col = {ORANGE_COLOR}});
-    triangles.push_back((Triangle){.a_pos = {1.0f, 0.0f, -2.0f},
-                                   .b_pos = {0.0f, 0.0f, -2.0f},
+                                   .a_col = YELLOW_COLOR,
+                                   .b_col = YELLOW_COLOR,
+                                   .c_col = YELLOW_COLOR});
+    triangles.push_back((Triangle){.a_pos = {0.0f, 0.0f, -2.0f},
+                                   .b_pos = {1.0f, 0.0f, -2.0f},
                                    .c_pos = {0.0f, 1.0f, -2.0f},
-                                   .a_col = {RED_COLOR},
-                                   .b_col = {ORANGE_COLOR},
-                                   .c_col = {RED_COLOR}});
-    lines.push_back((Line){.a_pos = {0.0f, 0.0f, 0.0f},
-                           .b_pos = {1.0f, 1.0f, 0.0f},
-                           .a_col = {YELLOW_COLOR},
-                           .b_col = {YELLOW_COLOR}});
-    lines.push_back((Line){.a_pos = {0.0f, 1.0f, -3.0f},
-                           .b_pos = {1.0f, 0.0f, -3.0f},
-                           .a_col = {GREEN_COLOR},
-                           .b_col = {GREEN_COLOR}});
-    return std::make_pair(triangles, lines);
+                                   .a_col = YELLOW_COLOR,
+                                   .b_col = YELLOW_COLOR,
+                                   .c_col = YELLOW_COLOR});
+    lines.push_back((Line){.a_pos = {0.4f, 0.4f, 0.0f},
+                           .b_pos = {0.4f, 0.4f, -1.5f},
+                           .a_col = GREEN_COLOR,
+                           .b_col = GREEN_COLOR});
+    lines.push_back((Line){.a_pos = {0.0f, 2.0f, -3.0f},
+                           .b_pos = {2.0f, 0.0f, -1.0f},
+                           .a_col = GREEN_COLOR,
+                           .b_col = GREEN_COLOR});
 }
 
-std::pair<std::vector<float>, std::vector<GLshort>>
-init_vertex_index_data(std::vector<Triangle> triangles, std::vector<Line> lines) {
-    std::vector<float> vertex_data;
-    std::vector<GLshort> index_data;
+void create_vertex_data(std::vector<Triangle>& triangles, std::vector<Line>& lines,
+                        std::vector<float>& vertex_data, std::vector<GLshort>& index_data) {
     size_t index_count = 0;
 
     // Add triangle vertex positions
@@ -167,49 +120,66 @@ init_vertex_index_data(std::vector<Triangle> triangles, std::vector<Line> lines)
         vertex_data.push_back(line.b_col.g);
         vertex_data.push_back(line.b_col.b);
     }
-
-    return std::make_pair(vertex_data, index_data);
 }
 
-// Adjust camera direction
-void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
-    if (firstMouse) {
-        lastX = xpos;
-        lastY = ypos;
-        firstMouse = false;
+bool intersects(const Line& line, const Triangle& triangle) {
+    // We will find the point at which the ray intersects the plane defined by the triangle and then
+    // check if that point is within the triangle.
+
+    // To find the point at which the ray intersects the plane we will use the fact that the normal
+    // of the plane and a vector within the plane would be orthogonal (so their cross product would
+    // be 0). We will take the vector on the plane to be defined by one of the points of the
+    // triangle and the point at which the ray intersects the plane.
+    glm::vec3 n = glm::normalize(
+        glm::cross((triangle.b_pos - triangle.a_pos), (triangle.c_pos - triangle.b_pos)));
+
+    glm::vec3 p_tri = triangle.a_pos;
+
+    // We can define the ray with the equation a + d*t = p where p is a point in the ray
+    // a would be the start of the line, d the direction and p the point of intersection
+    glm::vec3 a = line.a_pos;
+    glm::vec3 b = line.b_pos;
+    glm::vec3 l = glm::normalize(line.b_pos - line.a_pos);
+
+    // If you put the ray equation inside the cross product mentioned above you can solve for t
+    float l_dot_n = glm::dot(l, n);
+    if (l_dot_n < TINY_NUMBER && l_dot_n > -TINY_NUMBER) {
+        return false;
+    }
+    float t = glm::dot(p_tri - a, n) / l_dot_n;
+
+    // Now we have the point in the plane
+    glm::vec3 p_ray = a + (t * l);
+
+    // If the point is not on the line then the reay doesn't intersect the plane
+    if (glm::length(b - a) - glm::length(p_ray - a) - glm::length(b - p_ray) < TINY_NUMBER ||
+        glm::length(b - a) - glm::length(p_ray - a) - glm::length(b - p_ray) > -TINY_NUMBER) {
+        return false;
     }
 
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos;
-    lastX = xpos;
-    lastY = ypos;
+    // Check if the point on the plane is inside the triangle by checking if it's to the left of
+    // each side
+    if (is_left(glm::vec2(triangle.a_pos), glm::vec2(triangle.b_pos), glm::vec2(p_ray)) &&
+        is_left(glm::vec2(triangle.b_pos), glm::vec2(triangle.c_pos), glm::vec2(p_ray)) &&
+        is_left(glm::vec2(triangle.c_pos), glm::vec2(triangle.a_pos), glm::vec2(p_ray))) {
+        return true;
+    }
 
-    xoffset *= MOUSE_SENSITIVITY;
-    yoffset *= MOUSE_SENSITIVITY;
-
-    yaw += xoffset;
-    pitch += yoffset;
-
-    if (pitch > 89.0f)
-        pitch = 89.0f;
-    if (pitch < -89.0f)
-        pitch = -89.0f;
-
-    glm::vec3 direction;
-    direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    direction.y = sin(glm::radians(pitch));
-    direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-    cameraFront = glm::normalize(direction);
+    return false;
 }
 
-// Adjust camera zoom
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-    if (fov >= 1.0f && fov <= 45.0f)
-        fov -= yoffset;
-    if (fov <= 1.0f)
-        fov = 1.0f;
-    if (fov >= 45.0f)
-        fov = 45.0f;
+void mark_intersections(std::vector<Triangle>& triangles, std::vector<Line>& lines) {
+    for (auto& line : lines) {
+        for (auto& triangle : triangles) {
+            if (intersects(line, triangle)) {
+                line.a_col = glm::vec3(RED_COLOR);
+                line.b_col = glm::vec3(RED_COLOR);
+                triangle.a_col = glm::vec3(ORANGE_COLOR);
+                triangle.b_col = glm::vec3(ORANGE_COLOR);
+                triangle.c_col = glm::vec3(ORANGE_COLOR);
+            }
+        }
+    }
 }
 
 int init_program() {
@@ -246,7 +216,7 @@ int init_program() {
     return 0;
 }
 
-void init_vertices(std::vector<float> vertex_data_in, std::vector<GLshort> index_data_in,
+void init_vertices(std::vector<float>& vertex_data_in, std::vector<GLshort>& index_data_in,
                    size_t triangle_count, size_t line_count) {
     // Generate c style arrays
     float vertex_data[vertex_data_in.size()];
@@ -341,17 +311,17 @@ void view_projection_model() {
 }
 
 int main() {
-    // setup
-    auto triangles_and_lines = create_geometry();
-    auto triangles = triangles_and_lines.first;
-    auto lines = triangles_and_lines.second;
-    auto vertices_and_indices = init_vertex_index_data(triangles, lines);
     init_program();
-    init_vertices(vertices_and_indices.first, vertices_and_indices.second, triangles.size(),
-                  lines.size());
     init_shaders();
-    // setup_triangle_vertices();
-    // setup_line_vertices();
+
+    std::vector<Triangle> triangles;
+    std::vector<Line> lines;
+    std::vector<float> vertex_data;
+    std::vector<GLshort> index_data;
+    create_geometry(triangles, lines);
+    mark_intersections(triangles, lines);
+    create_vertex_data(triangles, lines, vertex_data, index_data);
+    init_vertices(vertex_data, index_data, triangles.size(), lines.size());
 
     // render loop
     while (!glfwWindowShouldClose(window)) {
@@ -363,7 +333,7 @@ int main() {
         processInput(window);
 
         // render
-        glClearColor(BROWN_COLOR, 1.0f);
+        glClearColor(CLEAR_COLOR, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // render
